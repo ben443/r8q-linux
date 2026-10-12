@@ -30,6 +30,12 @@ image, set `MUSIL` to its checkout:
 KSRC=/path/to/linux BUSYBOX=/path/to/busybox MUSIL=/path/to/Mu-Silicium ./scripts/build.sh
 ```
 
+The linked NetHunter Pro repository builds an Android `boot.img` for `r8q` with
+Samsung boot-image offsets. This project instead boots Mu-Silicium UEFI and loads
+`BOOTAA64.EFI` from the ESP, so those boot-image offsets and packaging steps do
+not apply here; this build compiles the `sm8250-samsung-r8q.dtb` target and embeds
+it in Mu-Silicium.
+
 Before building UEFI, enable the "Device Tree" FREEFORM block in
 `$MUSIL/Platforms/Samsung/r8qPkg/r8q.fdf`. The build script embeds the DTB in
 Mu-Silicium; it does not flash the phone or format partitions.
