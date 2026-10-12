@@ -58,6 +58,24 @@ MUSIL=$MUSIL DTB=$OUT/arch/arm64/boot/dts/qcom/sm8250-samsung-r8q.dtb ./scripts/
 # -> $MUSIL/Mu-r8q-0.img
 ```
 
+## Automated build artifacts
+
+The GitHub Actions **Build r8q images** workflow builds the kernel and Mu-Silicium
+UEFI image, then uploads a downloadable `r8q-linux-<kernel-release>` artifact.
+Download the artifact from the workflow run and extract its `.tar.gz` bundle to get:
+
+- `Mu-r8q-0.img` — UEFI image to flash to `BOOT`.
+- `EFI/BOOT/BOOTAA64.EFI` — kernel `Image` to deploy to the ESP.
+- `dtb/sm8250-samsung-r8q.dtb` — the DTB embedded in the UEFI image.
+- `modules/lib/modules/<kernel-release>/` — installable kernel modules.
+- `SHA256SUMS` — checksums for the packaged files.
+
+This is a build-output bundle, not a prebuilt Kali userdata image; installing Kali
+still uses the device-specific, destructive steps in section 6. The current Kali
+setup starts from the minimal NetHunter rootfs and does not install Phosh or
+`kali-mobile-themes`. The documented desktop setup is KDE Plasma Mobile, with
+GNOME and sway as alternatives.
+
 ## 3. Flash UEFI to BOOT
 
 Put the phone in **download mode** (power off; VolUp+VolDown; plug USB):
