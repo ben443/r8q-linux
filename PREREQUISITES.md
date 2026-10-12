@@ -12,7 +12,7 @@
   --padding_size 4096` first (this is a destructive step).
 
 > ⚠️ **This wipes your `userdata` partition.** Android (or whatever Linux was
-> there) is sacrificed for the Arch rootfs. Back up anything you care about.
+> there) is sacrificed for the Kali rootfs. Back up anything you care about.
 
 ## Host packages (Arch/derivatives shown; adapt for your distro)
 - `heimdall` (the Grimler fork, v2.2.2+ — handles 2020+ Samsungs) for Odin-protocol flashing
@@ -27,7 +27,7 @@
 ## Sources you'll clone
 - **Mainline Linux** (7.1.2 was used here): the r8q DT is upstream since v6.18.
 - **Mu-Silicium** — `github.com/Project-Silicium/Mu-Silicium` (has `r8qPkg`).
-- **Arch Linux ARM** aarch64 rootfs tarball (downloaded by `install-arch.sh`).
+- **Kali Linux ARM64** minimal NetHunter rootfs tarball (downloaded by `install-kali.sh`).
 
 ## Key combos
 - **Download mode:** power off → hold **VolUp + VolDown** → plug USB.
