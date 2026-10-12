@@ -12,14 +12,18 @@ Throughout: `$KSRC` = your mainline kernel source, `$OUT` = its build dir
 
 ## 1. Build the kernel (Image + DTB)
 
-Install the host packages in [`PREREQUISITES.md`](PREREQUISITES.md), check out
-mainline Linux, and provide a **static AArch64 BusyBox** for the embedded
-initramfs. The build script stages the device-tree files from [`dts/`](dts/),
-applies the patches from [`patches/`](patches/) (required for the additional
-hardware features), and sets the initramfs and forced kernel command line:
+Install the host packages in [`PREREQUISITES.md`](PREREQUISITES.md) and provide
+a **static AArch64 BusyBox** for the embedded initramfs. By default the build
+script shallow-clones `ben443/Linux-mainline-nethunter-pro` (`kali/master`) into
+`dl/`; this kernel branch contains the r8q device-tree files tracked here. To
+use a kernel tree already on disk, pass its path as `KSRC`. The script stages
+this repository's device-tree files, applies its patches, and configures the
+initramfs and forced kernel command line:
 
 ```bash
-# KSRC: mainline Linux checkout; BUSYBOX: statically linked AArch64 BusyBox
+# BUSYBOX: statically linked AArch64 BusyBox
+BUSYBOX=/path/to/busybox ./scripts/build.sh
+# Or use an existing Linux source tree instead of the default kernel fork:
 KSRC=/path/to/linux BUSYBOX=/path/to/busybox ./scripts/build.sh
 ```
 
@@ -27,7 +31,7 @@ The kernel-only output is in `out/kernel/`. To also build the Mu-Silicium UEFI
 image, set `MUSIL` to its checkout:
 
 ```bash
-KSRC=/path/to/linux BUSYBOX=/path/to/busybox MUSIL=/path/to/Mu-Silicium ./scripts/build.sh
+BUSYBOX=/path/to/busybox MUSIL=/path/to/Mu-Silicium ./scripts/build.sh
 ```
 
 The linked NetHunter Pro repository builds an Android `boot.img` for `r8q` with
