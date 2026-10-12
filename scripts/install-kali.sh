@@ -12,7 +12,7 @@ KV="${KV:?set KV to the kernel release (e.g. 7.1.2)}"
 OUT="${OUT:?set OUT to your kernel build dir (has modules)}"
 KSRC="${KSRC:?set KSRC to the kernel source dir}"
 MNT="${MNT:-/mnt/r8qroot}"
-TARBALL_URL="https://kali.download/nethunter-images/current/rootfs/kali-nethunter-rootfs-minimal-arm64.tar.xz"
+TARBALL_URL="https://kali.download/nethunter-images/current/rootfs/kalifs-arm64-minimal.tar.xz"
 
 # Identify userdata by GPT PARTLABEL — never guess the device letter.
 UD="$(lsblk -o NAME,PARTLABEL -rn | awk '$2=="userdata"{print "/dev/"$1}')"
@@ -20,11 +20,15 @@ UD="$(lsblk -o NAME,PARTLABEL -rn | awk '$2=="userdata"{print "/dev/"$1}')"
 echo "!! About to FORMAT $UD (userdata) as ext4 'kaliroot' — all data on it is LOST."
 read -rp "Type YES to continue: " ok; [ "$ok" = YES ] || exit 1
 
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+echo "[*] downloading Kali Linux ARM64 minimal rootfs"
+curl -fL "$TARBALL_URL" -o "$tmp/kali-rootfs.tar.xz"
+
 sudo mkfs.ext4 -F -L kaliroot "$UD"
 sudo mkdir -p "$MNT"; sudo mount "$UD" "$MNT"
 
-echo "[*] downloading + extracting Kali Linux ARM64 minimal rootfs"
-tmp="$(mktemp -d)"; curl -fL "$TARBALL_URL" -o "$tmp/kali-rootfs.tar.xz"
+echo "[*] extracting Kali Linux ARM64 minimal rootfs"
 sudo bsdtar -xpf "$tmp/kali-rootfs.tar.xz" -C "$MNT" --numeric-owner; sync
 
 # Kernel modules: install, then MOVE ASIDE. Cold-plugging the full tree hard-resets
