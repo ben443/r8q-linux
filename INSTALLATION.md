@@ -12,26 +12,40 @@ Throughout: `$KSRC` = your mainline kernel source, `$OUT` = its build dir
 
 ## 1. Build the kernel (Image + DTB)
 
-Drop the two device-tree files from [`dts/`](dts/) into
-`$KSRC/arch/arm64/boot/dts/qcom/` (they carry the display fix).
-`build_kernel.sh` also applies the kernel patches from [`patches/`](patches/)
-(required for GPU acceleration later — harmless otherwise). Then:
+Install the host packages in [`PREREQUISITES.md`](PREREQUISITES.md) and provide
+a **static AArch64 BusyBox** for the embedded initramfs. By default the build
+script shallow-clones `ben443/Linux-mainline-nethunter-pro` (`kali/master`) into
+`dl/`; this kernel branch contains the r8q device-tree files tracked here. To
+use a kernel tree already on disk, pass its path as `KSRC`. The script stages
+this repository's device-tree files, applies its patches, and configures the
+initramfs and forced kernel command line:
 
 ```bash
-# arm64 defconfig + our fragment, LLVM=1, bring-up drivers built-in
-KSRC=... OUT=... ./scripts/build_kernel.sh
+# BUSYBOX: statically linked AArch64 BusyBox
+BUSYBOX=/path/to/busybox ./scripts/build.sh
+# Or use an existing Linux source tree instead of the default kernel fork:
+KSRC=/path/to/linux BUSYBOX=/path/to/busybox ./scripts/build.sh
 ```
 
-The kernel is built with:
-- an **embedded switch-root initramfs** from [`initramfs/`](initramfs/)
-  (`CONFIG_INITRAMFS_SOURCE` = the dir with `init` + `irfs.devnodes`; you also
-  need a static aarch64 busybox in `bin/busybox`),
-- **`CONFIG_CMDLINE_FORCE`** set to the string in
-  [`config/cmdline.txt`](config/cmdline.txt) (the phone has no keyboard, so the
-  cmdline is baked in). Keep `simpledrm` **enabled**.
+The kernel-only output is in `out/kernel/`. To also build the Mu-Silicium UEFI
+image, set `MUSIL` to its checkout:
 
-Outputs: `$OUT/arch/arm64/boot/Image` and
-`$OUT/arch/arm64/boot/dts/qcom/sm8250-samsung-r8q.dtb`.
+```bash
+BUSYBOX=/path/to/busybox MUSIL=/path/to/Mu-Silicium ./scripts/build.sh
+```
+
+The linked NetHunter Pro repository builds an Android `boot.img` for `r8q` with
+Samsung boot-image offsets. This project instead boots Mu-Silicium UEFI and loads
+`BOOTAA64.EFI` from the ESP, so those boot-image offsets and packaging steps do
+not apply here; this build compiles the `sm8250-samsung-r8q.dtb` target and embeds
+it in Mu-Silicium.
+
+Before building UEFI, enable the "Device Tree" FREEFORM block in
+`$MUSIL/Platforms/Samsung/r8qPkg/r8q.fdf`. The build script embeds the DTB in
+Mu-Silicium; it does not flash the phone or format partitions.
+
+Keep `simpledrm` enabled. Outputs: `out/kernel/arch/arm64/boot/Image` and
+`out/kernel/arch/arm64/boot/dts/qcom/sm8250-samsung-r8q.dtb`.
 
 ## 2. Embed the DTB and build UEFI
 

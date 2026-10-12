@@ -16,7 +16,8 @@
 
 ## Host packages (Arch/derivatives shown; adapt for your distro)
 - `heimdall` (the Grimler fork, v2.2.2+ — handles 2020+ Samsungs) for Odin-protocol flashing
-- `clang` / `llvm` / `lld` (kernel is built with `LLVM=1`), `make`, `bc`, `flex`, `bison`, `dtc`
+- `git`, `clang` / `llvm` / `lld` (kernel is built with `LLVM=1`), `make`, `bc`, `flex`, `bison`, `dtc`
+- a **statically linked AArch64 BusyBox** for the embedded switch-root initramfs
 - `aarch64-linux-gnu-gcc` (or clang cross) toolchain bits as needed
 - `python` + `python-venv` (for Mu-Silicium's edk2 pytools), `mono`/`dotnet` per Mu-Silicium docs
 - `bsdtar` (libarchive), `curl`, `openssl`
