@@ -12,26 +12,30 @@ Throughout: `$KSRC` = your mainline kernel source, `$OUT` = its build dir
 
 ## 1. Build the kernel (Image + DTB)
 
-Drop the two device-tree files from [`dts/`](dts/) into
-`$KSRC/arch/arm64/boot/dts/qcom/` (they carry the display fix).
-`build_kernel.sh` also applies the kernel patches from [`patches/`](patches/)
-(required for GPU acceleration later — harmless otherwise). Then:
+Install the host packages in [`PREREQUISITES.md`](PREREQUISITES.md), check out
+mainline Linux, and provide a **static AArch64 BusyBox** for the embedded
+initramfs. The build script stages the device-tree files from [`dts/`](dts/),
+applies the patches from [`patches/`](patches/) (required for the additional
+hardware features), and sets the initramfs and forced kernel command line:
 
 ```bash
-# arm64 defconfig + our fragment, LLVM=1, bring-up drivers built-in
-KSRC=... OUT=... ./scripts/build_kernel.sh
+# KSRC: mainline Linux checkout; BUSYBOX: statically linked AArch64 BusyBox
+KSRC=/path/to/linux BUSYBOX=/path/to/busybox ./scripts/build.sh
 ```
 
-The kernel is built with:
-- an **embedded switch-root initramfs** from [`initramfs/`](initramfs/)
-  (`CONFIG_INITRAMFS_SOURCE` = the dir with `init` + `irfs.devnodes`; you also
-  need a static aarch64 busybox in `bin/busybox`),
-- **`CONFIG_CMDLINE_FORCE`** set to the string in
-  [`config/cmdline.txt`](config/cmdline.txt) (the phone has no keyboard, so the
-  cmdline is baked in). Keep `simpledrm` **enabled**.
+The kernel-only output is in `out/kernel/`. To also build the Mu-Silicium UEFI
+image, set `MUSIL` to its checkout:
 
-Outputs: `$OUT/arch/arm64/boot/Image` and
-`$OUT/arch/arm64/boot/dts/qcom/sm8250-samsung-r8q.dtb`.
+```bash
+KSRC=/path/to/linux BUSYBOX=/path/to/busybox MUSIL=/path/to/Mu-Silicium ./scripts/build.sh
+```
+
+Before building UEFI, enable the "Device Tree" FREEFORM block in
+`$MUSIL/Platforms/Samsung/r8qPkg/r8q.fdf`. The build script embeds the DTB in
+Mu-Silicium; it does not flash the phone or format partitions.
+
+Keep `simpledrm` enabled. Outputs: `out/kernel/arch/arm64/boot/Image` and
+`out/kernel/arch/arm64/boot/dts/qcom/sm8250-samsung-r8q.dtb`.
 
 ## 2. Embed the DTB and build UEFI
 
