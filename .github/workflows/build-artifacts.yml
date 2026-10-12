@@ -1,0 +1,151 @@
+name: Build r8q images
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            bc bison build-essential ca-certificates clang curl device-tree-compiler \
+            dwarves file flex gcc-aarch64-linux-gnu gettext git gnupg kmod libelf-dev \
+            libfdt-dev libgnutls28-dev liblz4-dev libncurses-dev libssl-dev libzstd-dev \
+            lld llvm locales make mono-devel nasm patch python3 python3-git python3-pip \
+            python3-venv rsync uuid-dev zlib1g-dev
+
+      - name: Build static AArch64 BusyBox
+        run: |
+          git clone --depth 1 --branch 1_36_1 \
+            https://git.busybox.net/busybox "$RUNNER_TEMP/busybox-src"
+          make -C "$RUNNER_TEMP/busybox-src" ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- defconfig
+          sed -i 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' \
+            "$RUNNER_TEMP/busybox-src/.config"
+          make -C "$RUNNER_TEMP/busybox-src" ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- oldconfig </dev/null
+          make -C "$RUNNER_TEMP/busybox-src" ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)"
+          if aarch64-linux-gnu-readelf -l "$RUNNER_TEMP/busybox-src/busybox" \
+            | grep -q 'Requesting program interpreter'; then
+            echo "BusyBox must be statically linked for the initramfs." >&2
+            exit 1
+          fi
+
+      - name: Prepare Mu-Silicium
+        run: |
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/Project-Silicium/Mu-Silicium.git \
+            "$RUNNER_TEMP/Mu-Silicium"
+          python3 -m venv "$GITHUB_WORKSPACE/.venv"
+          "$GITHUB_WORKSPACE/.venv/bin/python" -m pip install --upgrade pip
+          "$GITHUB_WORKSPACE/.venv/bin/python" -m pip install \
+            -r "$RUNNER_TEMP/Mu-Silicium/pip-requirements.txt"
+
+      - name: Enable embedded device tree in Mu-Silicium
+        run: |
+          python3 - "$RUNNER_TEMP/Mu-Silicium/Platforms/Samsung/r8qPkg/r8q.fdf" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          commented = """  #INF EmbeddedPkg/Drivers/DtPlatformDxe/DtPlatformDxe.inf
+            #FILE FREEFORM = 25462CDA-221F-47DF-AC1D-259CFAA4E326 {
+            #  SECTION RAW = r8qPkg/FdtBlob/sm8250-samsung-r8q.dtb
+            #  SECTION UI = "Device Tree"
+            #}"""
+          enabled = """  INF EmbeddedPkg/Drivers/DtPlatformDxe/DtPlatformDxe.inf
+            FILE FREEFORM = 25462CDA-221F-47DF-AC1D-259CFAA4E326 {
+              SECTION RAW = r8qPkg/FdtBlob/sm8250-samsung-r8q.dtb
+              SECTION UI = "Device Tree"
+            }"""
+
+          if enabled not in text:
+              if commented not in text:
+                  raise SystemExit("Could not find the expected Device Tree block in r8q.fdf.")
+              path.write_text(text.replace(commented, enabled, 1))
+          PY
+
+      - name: Build kernel and UEFI firmware
+        run: |
+          BUSYBOX="$RUNNER_TEMP/busybox-src/busybox" \
+          KSRC="$GITHUB_WORKSPACE/dl/Linux-mainline-nethunter-pro" \
+          KOUT="$GITHUB_WORKSPACE/out/kernel" \
+          MUSIL="$RUNNER_TEMP/Mu-Silicium" \
+          VENV="$GITHUB_WORKSPACE/.venv" \
+            ./scripts/build.sh
+
+      - name: Package build outputs
+        id: package
+        run: |
+          set -euo pipefail
+          KSRC="$GITHUB_WORKSPACE/dl/Linux-mainline-nethunter-pro"
+          KOUT="$GITHUB_WORKSPACE/out/kernel"
+          MUSIL="$RUNNER_TEMP/Mu-Silicium"
+          KV="$(make -s -C "$KSRC" O="$KOUT" ARCH=arm64 LLVM=1 kernelrelease)"
+          DTB="$KOUT/arch/arm64/boot/dts/qcom/sm8250-samsung-r8q.dtb"
+          PACKAGE_NAME="r8q-linux-${KV}"
+          PACKAGE_DIR="$GITHUB_WORKSPACE/dist/$PACKAGE_NAME"
+          MODULES_ROOT="$PACKAGE_DIR/modules/lib/modules/$KV"
+
+          test -s "$KOUT/arch/arm64/boot/Image"
+          test -s "$DTB"
+          test -s "$MUSIL/Mu-r8q-0.img"
+          mkdir -p "$PACKAGE_DIR/EFI/BOOT" "$PACKAGE_DIR/dtb"
+          install -m 0644 "$KOUT/arch/arm64/boot/Image" \
+            "$PACKAGE_DIR/EFI/BOOT/BOOTAA64.EFI"
+          install -m 0644 "$DTB" "$PACKAGE_DIR/dtb/sm8250-samsung-r8q.dtb"
+          install -m 0644 "$MUSIL/Mu-r8q-0.img" "$PACKAGE_DIR/Mu-r8q-0.img"
+
+          make -C "$KSRC" O="$KOUT" ARCH=arm64 LLVM=1 \
+            INSTALL_MOD_PATH="$PACKAGE_DIR/modules" modules_install
+          if [[ -L "$MODULES_ROOT/build" ]]; then
+            rm "$MODULES_ROOT/build"
+          fi
+          if [[ -L "$MODULES_ROOT/source" ]]; then
+            rm "$MODULES_ROOT/source"
+          fi
+          depmod -b "$PACKAGE_DIR/modules" "$KV"
+          find "$MODULES_ROOT" -type f -name '*.ko*' -print -quit | grep -q .
+
+          cat > "$PACKAGE_DIR/BUILD-INFO.txt" <<EOF
+          Kernel release: $KV
+          Kernel source commit: $(git -C "$KSRC" rev-parse HEAD)
+          r8q-linux source commit: $(git rev-parse HEAD)
+
+          Mu-r8q-0.img is the UEFI image for flashing to BOOT.
+          EFI/BOOT/BOOTAA64.EFI is the kernel Image for the ESP.
+          dtb/ contains the DTB embedded in the UEFI image.
+          modules/lib/modules/$KV contains the installable kernel modules.
+          See INSTALLATION.md in the r8q-linux repository for deployment instructions.
+          EOF
+
+          (
+            cd "$PACKAGE_DIR"
+            find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum \
+              > SHA256SUMS
+          )
+          tar -C "$GITHUB_WORKSPACE/dist" -czf \
+            "$GITHUB_WORKSPACE/dist/${PACKAGE_NAME}.tar.gz" "$PACKAGE_NAME"
+          echo "kernel-release=$KV" >> "$GITHUB_OUTPUT"
+
+      - name: Upload downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8q-linux-${{ steps.package.outputs.kernel-release }}
+          path: dist/r8q-linux-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
