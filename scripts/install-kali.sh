@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install Arch Linux ARM onto the phone's userdata partition + lay down our
+# Install Kali Linux ARM64 onto the phone's userdata partition + lay down our
 # services/config. Run with the phone in Mu-Silicium MASS-STORAGE mode.
 #
 # WARNING: DESTROYS the userdata partition (Android / any prior Linux install).
@@ -12,20 +12,24 @@ KV="${KV:?set KV to the kernel release (e.g. 7.1.2)}"
 OUT="${OUT:?set OUT to your kernel build dir (has modules)}"
 KSRC="${KSRC:?set KSRC to the kernel source dir}"
 MNT="${MNT:-/mnt/r8qroot}"
-TARBALL_URL="http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+TARBALL_URL="https://kali.download/nethunter-images/current/rootfs/kalifs-arm64-minimal.tar.xz"
 
 # Identify userdata by GPT PARTLABEL — never guess the device letter.
 UD="$(lsblk -o NAME,PARTLABEL -rn | awk '$2=="userdata"{print "/dev/"$1}')"
 [ -n "$UD" ] || { echo "!! userdata not found — is the phone in mass-storage mode?"; exit 1; }
-echo "!! About to FORMAT $UD (userdata) as ext4 'archroot' — all data on it is LOST."
+echo "!! About to FORMAT $UD (userdata) as ext4 'kaliroot' — all data on it is LOST."
 read -rp "Type YES to continue: " ok; [ "$ok" = YES ] || exit 1
 
-sudo mkfs.ext4 -F -L archroot "$UD"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+echo "[*] downloading Kali Linux ARM64 minimal rootfs"
+curl -fL "$TARBALL_URL" -o "$tmp/kali-rootfs.tar.xz"
+
+sudo mkfs.ext4 -F -L kaliroot "$UD"
 sudo mkdir -p "$MNT"; sudo mount "$UD" "$MNT"
 
-echo "[*] downloading + extracting Arch Linux ARM aarch64"
-tmp="$(mktemp -d)"; curl -L "$TARBALL_URL" -o "$tmp/alarm.tgz"
-sudo bsdtar -xpf "$tmp/alarm.tgz" -C "$MNT" --numeric-owner; sync
+echo "[*] extracting Kali Linux ARM64 minimal rootfs"
+sudo bsdtar -xpf "$tmp/kali-rootfs.tar.xz" -C "$MNT" --numeric-owner; sync
 
 # Kernel modules: install, then MOVE ASIDE. Cold-plugging the full tree hard-resets
 # the SoC (qcom_wdt=m takes over the firmware-armed APSS watchdog -> bite ~30 s later;
@@ -47,16 +51,16 @@ sudo ln -sf /usr/lib/systemd/system/systemd-networkd.service \
             "$MNT/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"
 sudo ln -sf /usr/lib/systemd/system/systemd-networkd.socket \
             "$MNT/etc/systemd/system/sockets.target.wants/systemd-networkd.socket"
-# sshd already enabled in the tarball; allow root password login (no keyboard -> ssh is the way in)
+# Enable SSH and allow root password login (no keyboard -> ssh is the way in).
 printf '\n# r8q bring-up\nPermitRootLogin yes\nPasswordAuthentication yes\n' | sudo tee -a "$MNT/etc/ssh/sshd_config" >/dev/null
+sudo ln -sf /usr/lib/systemd/system/ssh.service \
+            "$MNT/etc/systemd/system/multi-user.target.wants/ssh.service"
 # root password = root
 HASH="$(openssl passwd -6 root)"; sudo sed -i "s|^root:[^:]*:|root:${HASH//|/\\|}:|" "$MNT/etc/shadow"
-# pacman: our kernel has no Landlock -> disable the download sandbox
-grep -q '^DisableSandbox' "$MNT/etc/pacman.conf" || sudo sed -i '/^\[options\]/a DisableSandbox' "$MNT/etc/pacman.conf"
 # fstab / hostname / persistent journal
-echo 'LABEL=archroot  /  ext4  rw,relatime  0 1' | sudo tee "$MNT/etc/fstab" >/dev/null
+echo 'LABEL=kaliroot  /  ext4  rw,relatime  0 1' | sudo tee "$MNT/etc/fstab" >/dev/null
 echo r8q | sudo tee "$MNT/etc/hostname" >/dev/null
 sudo mkdir -p "$MNT/var/log/journal"
 
 sync; sudo umount "$MNT"
-echo "[+] Arch installed on $UD (LABEL=archroot). Boot the phone; then: ssh root@172.16.42.1 (pw: root)"
+echo "[+] Kali installed on $UD (LABEL=kaliroot). Boot the phone; then: ssh root@172.16.42.1 (pw: root)"

@@ -1,6 +1,6 @@
 # Installation
 
-This gets you a booting **Arch Linux ARM** on the r8q, reachable from your PC
+This gets you a booting **Kali Linux ARM64** on the r8q, reachable from your PC
 over the USB cable (SSH + internet). Read [`PREREQUISITES.md`](PREREQUISITES.md)
 first — **this wipes `userdata`.**
 
@@ -72,19 +72,19 @@ Still in mass-storage mode:
 ./scripts/deploy-esp.sh $OUT/arch/arm64/boot/Image   # -> ESP:/EFI/BOOT/BOOTAA64.EFI
 ```
 
-## 6. Install Arch onto userdata
+## 6. Install Kali onto userdata
 
 Still in mass-storage mode (this **formats userdata**):
 
 ```bash
-KV=7.1.2 OUT=$OUT KSRC=$KSRC ./scripts/install-arch.sh
+KV=7.1.2 OUT=$OUT KSRC=$KSRC ./scripts/install-kali.sh
 ```
 
-It extracts Arch Linux ARM, **moves the kernel module tree aside** (cold-plugging
+It extracts the minimal Kali NetHunter ARM64 rootfs, **moves the kernel module tree aside** (cold-plugging
 the full tree hard-resets the SoC — see the note in the script), lays down our
-[`rootfs/`](rootfs/) overlay, enables `sshd` + `systemd-networkd` +
+[`rootfs/`](rootfs/) overlay, enables `ssh` + `systemd-networkd` +
 `r8q-usb-gadget`, sets root autologin on `tty1`, root password `root`, and
-disables the pacman sandbox (our kernel has no Landlock).
+enables root SSH password login for initial setup.
 
 ## 7. Boot
 
@@ -98,7 +98,7 @@ sudo ip addr add 172.16.42.14/24 dev "$DEV"; sudo ip link set "$DEV" up
 ssh root@172.16.42.1            # password: root
 ```
 
-## 8. USB tethering (internet + pacman)
+## 8. USB tethering (internet + apt)
 
 Share the PC's internet to the phone (host NAT is runtime — re-run after a PC
 reboot):
@@ -111,9 +111,9 @@ The phone already has `Gateway=172.16.42.14` + DNS baked into
 `rootfs/etc/systemd/network/20-usb0.network`, so once the host NAT is up:
 
 ```bash
-ssh root@172.16.42.1 'ping -c2 archlinux.org'
-# first pacman use on a fresh rootfs:
-ssh root@172.16.42.1 'pacman-key --init && pacman-key --populate archlinuxarm && pacman -Sy'
+ssh root@172.16.42.1 'ping -c2 kali.org'
+# Refresh Kali's package index and bring the rolling system up to date first:
+ssh root@172.16.42.1 'apt update && apt full-upgrade'
 ```
 
 ## 9. GPU acceleration (Adreno 650) + sway
@@ -125,7 +125,7 @@ at minimum `msm.ko` and its dependencies under `/lib/modules/$KV/`.
 **a) Userspace + generic firmware** (on the phone, over SSH):
 
 ```bash
-pacman -S mesa vulkan-freedreno linux-firmware-qcom sway foot seatd
+apt install mesa-vulkan-drivers firmware-qcom-soc firmware-atheros sway foot seatd
 systemctl enable --now seatd
 ```
 
@@ -211,7 +211,7 @@ starting it, and put the config in place first — the config is what keeps NM o
 `usb0`, and `usb0` is the SSH connection you are typing over:
 
 ```bash
-pacman -S networkmanager wireless-regdb
+apt install network-manager wireless-regdb
 install -Dm644 rootfs/etc/NetworkManager/conf.d/10-r8q.conf \
                /etc/NetworkManager/conf.d/10-r8q.conf   # usb0 unmanaged, dns=none
 systemctl enable --now NetworkManager
@@ -221,12 +221,10 @@ nmcli device status      # want: wlp1s0 managed, usb0 "unmanaged"
 
 Two gotchas:
 
-- If `nmcli` dies with `libnm.so.0: version 'libnm_1_xx_0' not found`, you did a
-  partial upgrade (`pacman -Sy networkmanager` against an older `libnm`). Fix with
-  `pacman -S libnm`. The daemon runs regardless, but every client — `nmcli`,
-  gnome-control-center, the GNOME shell menu — is broken until the versions match.
+- Keep Kali's rolling packages in sync: run `apt update && apt full-upgrade`
+  before installing or upgrading individual packages.
 - Do package installs over a transient link with
-  `systemd-run --unit=install --collect pacman -S ...` so an SSH drop cannot
+  `systemd-run --unit=install --collect apt install ...` so an SSH drop cannot
   abort the transaction half-way.
 
 Then join a network from **Settings → Wi-Fi** on the phone itself, or over SSH:
@@ -303,7 +301,7 @@ cmdline — that needs an `Image` rebuild, since `CONFIG_CMDLINE_FORCE=y`.
 ## 12. KDE Plasma Mobile
 
 ```bash
-systemd-run --unit=install --collect pacman -S plasma-mobile plasma-settings kscreen sddm
+systemd-run --unit=install --collect apt install plasma-mobile plasma-settings kscreen sddm
 ```
 
 **a) Stop PowerDevil from suspending — do this BEFORE the first login.** Suspend
@@ -361,26 +359,21 @@ which needs `WAYLAND_DISPLAY=wayland-0` in addition to the usual
 
 GNOME stays installed; revert with `systemctl disable sddm && systemctl enable gdm`.
 
-## Protect the Samsung zap shader from pacman
+## Protect the Samsung zap shader from package upgrades
 
-`/usr/lib/firmware/qcom/sm8250/a650_zap.mbn` is **owned by `linux-firmware-qcom`**,
-and step 9 overwrote it with your Samsung-signed blob. Any upgrade of that package
-silently restores the upstream file and the GPU then hangs on its first submit. Add
-this to `/etc/pacman.conf` once:
+The package owning `/usr/lib/firmware/qcom/sm8250/a650_zap.mbn` may overwrite
+your Samsung-signed blob during an upgrade, after which the GPU hangs on its first
+submit. Before installing the local blob, divert the package-owned path once (use
+`dpkg-query -S` to confirm the exact path in your Kali rootfs):
 
+```bash
+dpkg-divert --local --rename --add /usr/lib/firmware/qcom/sm8250/a650_zap.mbn
 ```
-NoUpgrade = usr/lib/firmware/qcom/sm8250/a650_zap.mbn
-```
 
-pacman will drop the upstream file as `.pacnew` instead. Verify at any time with
+The package's version is kept as `.distrib`; then install the Samsung-signed blob
+at the original path. Verify at any time with
 `md5sum /usr/lib/firmware/qcom/sm8250/a650_zap.mbn` against your saved copy.
 
-Two more things that bite on a fresh ALARM rootfs:
-
-- `/` and `/usr` may be owned by `alarm` (a tarball-extraction artifact, same as
-  `/etc`). `systemd-tmpfiles` then fails during package installs with
-  `Detected unsafe path transition / (owned by alarm) → /dev`. Fix once with
-  `chown root:root / /usr && chmod 755 /`.
-- **`systemctl reboot` does not come back.** Mu-Silicium lives on the `RECOVERY`
+**`systemctl reboot` does not come back.** Mu-Silicium lives on the `RECOVERY`
   partition, so returning to Linux always needs the physical
   **VolUp+Power with USB connected** combo.

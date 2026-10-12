@@ -1,5 +1,5 @@
 #!/bin/busybox sh
-# r8q ARCH switch_root initramfs.
+# r8q Kali Linux switch_root initramfs.
 # UFS + ext4 are BUILT-IN on mainline sm8250, so there is NO module-loading stage
 # (unlike garnet). Job: wait for the userdata partition, mount it, and hand PID 1
 # to systemd. On ANY failure, bring up the NCM gadget + telnet + an on-screen
@@ -18,7 +18,7 @@ echo 8 > /proc/sys/kernel/printk 2>/dev/null
 
 echo ""
 echo "=================================================="
-echo "  r8q ARCH switch_root initramfs — kernel $(uname -r)"
+echo "  r8q Kali Linux switch_root initramfs — kernel $(uname -r)"
 echo "=================================================="
 
 # Find a block device by GPT PARTNAME (from sysfs uevent).
@@ -99,11 +99,11 @@ fi
 
 # ---- FAILURE: debug mode -------------------------------------------------------
 mount -t proc proc /proc 2>/dev/null; mount -t sysfs sysfs /sys 2>/dev/null
-echo "!! ARCH BOOT FAILED: $REASON"
+echo "!! KALI BOOT FAILED: $REASON"
 { echo "FAIL uptime $($BB cut -d' ' -f1 /proc/uptime)s: $REASON"; dmesg | tail -40; } | esp_log switchroot-fail.txt
 setup_gadget
 i=0
 while true; do
-    echo "==== [arch-fail hb $i uptime $($BB cut -d' ' -f1 /proc/uptime)s] root='$ROOT' REASON: $REASON ===="
+    echo "==== [kali-fail hb $i uptime $($BB cut -d' ' -f1 /proc/uptime)s] root='$ROOT' REASON: $REASON ===="
     i=$((i+1)); sleep 20
 done

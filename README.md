@@ -1,6 +1,6 @@
 # Linux on the Samsung Galaxy S20 FE 5G (`r8q`)
 
-Mainline Linux + **Arch Linux ARM** on the Samsung Galaxy S20 FE 5G Snapdragon
+Mainline Linux + **Kali Linux ARM64** on the Samsung Galaxy S20 FE 5G Snapdragon
 (codename **`r8q`**, SoC **SM8250 "kona" / Snapdragon 865**), booted through
 **[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) UEFI** — not a
 downstream Android kernel, the **real mainline kernel**.
@@ -8,7 +8,7 @@ downstream Android kernel, the **real mainline kernel**.
 Everything here exists so that **anyone with their own r8q** can reproduce it
 from clean upstream sources: the device-tree change that lights the panel, the
 kernel config, the switch-root initramfs, the systemd services, and a small set
-of scripts that take you from a UEFI flash to a booting Arch install you can SSH
+of scripts that take you from a UEFI flash to a booting Kali install you can SSH
 into.
 
 > **Read [`PREREQUISITES.md`](PREREQUISITES.md) first** (unlocked bootloader,
@@ -31,8 +31,8 @@ into.
 | 1 | Mainline kernel boots — BusyBox/switch-root initramfs, output on the phone screen | ✅ |
 | 2 | **UFS storage** — all LUNs and the full GPT show up as `/dev/sd*` (first try, no hacks) | ✅ |
 | 3 | **Display** — a *persistent, live* mainline framebuffer console on the AMOLED panel | ✅ |
-| 4 | **Arch Linux ARM + systemd** on userdata, root autologin on the panel (`tty1`) | ✅ |
-| 5 | **SSH over USB** — `ssh root@172.16.42.1`, plus **USB tethering** (internet + `pacman`) | ✅ |
+| 4 | **Kali Linux ARM64 + systemd** on userdata, root autologin on the panel (`tty1`) | ✅ |
+| 5 | **SSH over USB** — `ssh root@172.16.42.1`, plus **USB tethering** (internet + `apt`) | ✅ |
 | 6 | **GPU acceleration** — Adreno 650 via freedreno/turnip (GLES 3.2 + Vulkan 1.3) | ✅ |
 | 7 | **GNOME 50** on the panel — gdm autologin, mutter rendering on the Adreno (sway still available as a fallback) | ✅ |
 | 8 | **Touchscreen** — STM FTS5CU56A multitouch, working under Plasma Mobile and GNOME; the Zinitix ZT7650 variant works too | ✅ |
@@ -55,7 +55,7 @@ the rootfs is the `userdata` partition; the kernel is mainline **Linux 7.1.2**.
 ## Repository layout
 
 ```
-r8q-arch/
+r8q-kali/
 ├── README.md                     ← you are here
 ├── PREREQUISITES.md              ← read first (bootloader, host packages, data wipe)
 ├── INSTALLATION.md               ← the step-by-step
@@ -64,7 +64,7 @@ r8q-arch/
 ├── config/                       ← r8q_bringup.config, cmdline.txt
 ├── initramfs/                    ← switch-root /init (+ irfs.devnodes)
 ├── rootfs/                       ← systemd services, networkd, Plasma Mobile/sddm wiring, cpuidle workaround, gadget script, GPU + touch + battery + Wi-Fi services
-└── scripts/                      ← build-uefi / flash / deploy-esp / install-arch / host-tether / build_kernel
+└── scripts/                      ← build-uefi / flash / deploy-esp / install-kali / host-tether / build_kernel
 ```
 
 ## Roadmap
@@ -84,7 +84,7 @@ SSH into. What's left, roughly in the order it's worth doing:
 Download mode → `heimdall` flashes **Mu-Silicium UEFI** (with our DTB embedded)
 to `BOOT` → UEFI auto-runs `\EFI\BOOT\BOOTAA64.EFI` (our kernel `Image`, EFI-stub,
 with an embedded **switch-root initramfs**) → the initramfs mounts `userdata` and
-`switch_root`s into **Arch Linux ARM / systemd** → NCM USB gadget comes up →
+`switch_root`s into **Kali Linux ARM64 / systemd** → NCM USB gadget comes up →
 `ssh root@172.16.42.1`.
 
 The DTB lives **inside the firmware** (Mu-Silicium exposes it as an EFI config
