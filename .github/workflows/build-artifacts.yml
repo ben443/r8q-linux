@@ -21,7 +21,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             bc bison build-essential ca-certificates clang curl device-tree-compiler \
-            dwarves file flex gcc-aarch64-linux-gnu gettext git gnupg kmod libelf-dev \
+            dwarves file flex gcc-aarch64-linux-gnu gettext git gnupg kmod \
+            libc6-dev-arm64-cross libelf-dev \
             libfdt-dev libgnutls28-dev liblz4-dev libncurses-dev libssl-dev libzstd-dev \
             lld llvm locales make mono-devel nasm patch python3 python3-git python3-pip \
             python3-venv rsync uuid-dev zlib1g-dev
